@@ -112,6 +112,13 @@ func (b *bucket) Remove(t *Timer) bool {
 }
 
 func (b *bucket) Flush(reinsert func(*Timer)) {
+	ts := b.flushWithLock()
+	for _, t := range ts {
+		reinsert(t)
+	}
+}
+
+func (b *bucket) flushWithLock() (ts []*Timer) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -120,14 +127,11 @@ func (b *bucket) Flush(reinsert func(*Timer)) {
 
 		t := e.Value.(*Timer)
 		b.remove(t)
-		// Note that this operation will either execute the timer's task, or
-		// insert the timer into another bucket belonging to a lower-level wheel.
-		//
-		// In either case, no further lock operation will happen to b.mu.
-		reinsert(t)
+		ts = append(ts, t)
 
 		e = next
 	}
 
 	b.SetExpiration(-1)
+	return ts
 }
